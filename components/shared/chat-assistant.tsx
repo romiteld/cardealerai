@@ -1,16 +1,16 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "../ui/scroll-area"
-import { X, Send, MessageSquare } from 'lucide-react'
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { MessageSquare, X, Send } from 'lucide-react'
 
 interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'ai';
+  id: number
+  text: string
+  sender: 'user' | 'ai'
 }
 
 export default function ChatAssistant() {
@@ -23,14 +23,7 @@ export default function ChatAssistant() {
     }
   ])
   const [input, setInput] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -63,7 +56,7 @@ export default function ChatAssistant() {
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 rounded-full w-12 h-12 p-0 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg"
+        className="fixed bottom-4 right-4 rounded-full w-12 h-12 p-0 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg z-50"
       >
         <MessageSquare className="h-6 w-6" />
       </Button>
@@ -75,7 +68,7 @@ export default function ChatAssistant() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-20 right-4 w-96 h-[600px] bg-white rounded-lg shadow-xl flex flex-col overflow-hidden"
+            className="fixed bottom-20 right-4 w-96 h-[600px] bg-gray-800 rounded-lg shadow-xl flex flex-col overflow-hidden z-50"
           >
             {/* Header */}
             <div className="p-4 bg-gradient-to-r from-purple-600 to-pink-600 flex justify-between items-center">
@@ -92,40 +85,41 @@ export default function ChatAssistant() {
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((message) => (
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`mb-4 flex ${
+                    message.sender === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
                   <div
-                    key={message.id}
-                    className={`flex ${
-                      message.sender === 'user' ? 'justify-end' : 'justify-start'
+                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                      message.sender === 'user'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-700 text-gray-100'
                     }`}
                   >
-                    <div
-                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                        message.sender === 'user'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
-                      }`}
-                    >
-                      {message.text}
-                    </div>
+                    {message.text}
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
             </ScrollArea>
 
             {/* Input */}
-            <div className="p-4 border-t">
-              <div className="flex space-x-2">
+            <div className="p-4 border-t border-gray-700">
+              <div className="flex gap-2">
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type your message..."
-                  className="flex-1"
+                  className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-purple-400"
                 />
-                <Button onClick={handleSend} className="bg-purple-600 hover:bg-purple-700">
+                <Button
+                  onClick={handleSend}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>

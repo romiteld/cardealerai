@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Navbar from '@/components/shared/navbar'
+import ChatAssistant from '@/components/shared/chat-assistant'
 
 export const metadata: Metadata = {
   title: 'CarDealerAI',
@@ -17,6 +18,7 @@ export default function AuthLayout({
       <div className="pt-16 max-w-7xl mx-auto px-4 py-6">
         {children}
       </div>
+      <ChatAssistant />
     </main>
   )
 }
