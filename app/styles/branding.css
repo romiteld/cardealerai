@@ -1,0 +1,17 @@
+.brand-preview {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--secondary-color);
+}
+
+.dealership-name {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+.dealership-slogan {
+  font-size: 1.125rem;
+  font-style: italic;
+  color: var(--primary-color);
+}
