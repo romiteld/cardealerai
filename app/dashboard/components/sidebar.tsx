@@ -21,6 +21,11 @@ const navigation = [
     icon: Icons.car,
   },
   {
+    name: 'Market Research',
+    href: '/dashboard/market-research',
+    icon: Icons.chart,
+  },
+  {
     name: 'Image Gallery',
     href: '/dashboard/gallery',
     icon: Icons.camera,
@@ -39,6 +44,11 @@ const navigation = [
     name: 'Team',
     href: '/dashboard/team',
     icon: Icons.users,
+  },
+  {
+    name: 'Subscription',
+    href: '/dashboard/subscription',
+    icon: Icons.coins,
   },
   {
     name: 'Settings',

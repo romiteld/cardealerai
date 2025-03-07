@@ -1,47 +1,88 @@
-import { NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import { generateVehicleContent, VehicleInfo, GenerationOptions } from '@/lib/openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { vehicleType, prompt } = await req.json()
+    // Check authentication
+    const supabase = createServerClient();
+    const { data: { session } } = await supabase.auth.getSession();
 
-    if (!vehicleType || !prompt) {
+    if (!session) {
       return NextResponse.json(
-        { error: 'Vehicle type and prompt are required' },
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Get the request body
+    const { vehicleInfo, options } = await request.json() as {
+      vehicleInfo: VehicleInfo;
+      options?: GenerationOptions;
+    };
+
+    // Validate vehicle info
+    if (!vehicleInfo || !vehicleInfo.make || !vehicleInfo.model || !vehicleInfo.year) {
+      return NextResponse.json(
+        { error: 'Missing required vehicle information' },
         { status: 400 }
-      )
+      );
     }
 
-    const systemPrompt = `You are an expert automotive content writer. Create a compelling and detailed vehicle description that highlights the key features and benefits. Focus on creating engaging, professional content that would appeal to potential buyers.`
+    // Get dealership information to include in generation
+    const { data: userData } = await supabase
+      .from('users')
+      .select('*, dealerships(name, city, state)')
+      .eq('id', session.user.id)
+      .single();
 
-    const userPrompt = `Create a detailed description for a ${vehicleType} with the following details:\n${prompt}`
+    const dealershipName = userData?.dealerships?.name;
+    
+    // Generate content with OpenAI
+    const generatedContent = await generateVehicleContent(
+      vehicleInfo,
+      { 
+        ...options, 
+        dealershipName,
+      }
+    );
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 750,
-    })
+    // Save the generated content to the database if a listing ID is provided
+    if (vehicleInfo.stockNumber) {
+      const { data: listing } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('stock_number', vehicleInfo.stockNumber)
+        .single();
 
-    const generatedContent = completion.choices[0]?.message?.content
-
-    if (!generatedContent) {
-      throw new Error('No content generated')
+      if (listing) {
+        await supabase
+          .from('vehicle_content')
+          .upsert({
+            vehicle_id: listing.id,
+            description: generatedContent.description,
+            highlights: generatedContent.highlights,
+            seo_title: generatedContent.seoTitle,
+            seo_description: generatedContent.seoDescription,
+            generated_at: new Date().toISOString(),
+          });
+      }
     }
 
-    return NextResponse.json({ content: generatedContent })
-  } catch (error) {
-    console.error('Content generation error:', error)
+    return NextResponse.json(generatedContent);
+  } catch (error: any) {
+    console.error('Error generating content:', error);
+    
     return NextResponse.json(
-      { error: 'Failed to generate content' },
+      { error: error.message || 'Failed to generate content' },
       { status: 500 }
-    )
+    );
   }
+}
+
+export async function GET(request: NextRequest) {
+  return NextResponse.json(
+    { error: 'Method not allowed' },
+    { status: 405 }
+  );
 } 
