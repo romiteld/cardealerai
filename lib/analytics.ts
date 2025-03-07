@@ -2,7 +2,7 @@
  * Analytics utility for tracking user activity and performance
  */
 
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 
 export type ActivityPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -48,7 +48,7 @@ export async function getDealershipAnalytics(
   dealershipId: string,
   period: ActivityPeriod = 'month'
 ): Promise<AnalyticsData> {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Get date range based on period
   const now = new Date();
@@ -219,12 +219,27 @@ export async function getDealershipAnalytics(
     : 0;
   
   // Get vehicle type breakdown
-  const { data: vehicleTypesData } = await supabase
+  const { data: rawVehicleData } = await supabase
     .from('vehicles')
-    .select('body_type, count')
+    .select('body_type')
     .eq('dealership_id', dealershipId)
-    .eq('status', 'active')
-    .group('body_type');
+    .eq('status', 'active');
+    
+  // Process the data manually to group by body type
+  const bodyTypeMap = new Map();
+  rawVehicleData?.forEach(item => {
+    const bodyType = item.body_type || 'Unknown';
+    if (bodyTypeMap.has(bodyType)) {
+      bodyTypeMap.set(bodyType, bodyTypeMap.get(bodyType) + 1);
+    } else {
+      bodyTypeMap.set(bodyType, 1);
+    }
+  });
+  
+  const vehicleTypesData = Array.from(bodyTypeMap).map(([bodyType, count]) => ({
+    body_type: bodyType,
+    count
+  }));
   
   // Calculate total for percentages
   const totalVehiclesByType = vehicleTypesData?.reduce((sum, item) => sum + item.count, 0) || 0;
@@ -391,7 +406,7 @@ export async function getDealershipAnalytics(
  * Track a vehicle view event
  */
 export async function trackVehicleView(vehicleId: string, userId?: string) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Get vehicle details to get dealership ID
   const { data: vehicle } = await supabase
@@ -427,7 +442,7 @@ export async function trackLead(
     message?: string;
   }
 ) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Get vehicle details to get dealership ID
   const { data: vehicle } = await supabase
@@ -466,7 +481,7 @@ export async function trackSocialEngagement(
     comments?: number;
   }
 ) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Get vehicle details to get dealership ID
   const { data: vehicle } = await supabase
@@ -501,7 +516,7 @@ export async function trackSearchImpression(
   searchTerm: string,
   impressions: number = 1
 ) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Record the search impression
   await supabase

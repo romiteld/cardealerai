@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientComponentClient } from '@/lib/supabase/client'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,10 +15,7 @@ export default function SignUpForm() {
   const [error, setError] = useState<string | null>(null)
   
   // Initialize Supabase client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClientComponentClient()
   
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -160,6 +157,7 @@ export default function SignUpForm() {
         disabled={isLoading}
         onClick={async () => {
           setIsLoading(true)
+          setError(null)
           try {
             const { data, error } = await supabase.auth.signInWithOAuth({
               provider: 'google',
@@ -169,9 +167,13 @@ export default function SignUpForm() {
             })
             
             if (error) {
+              if (error.message.includes('provider is not enabled')) {
+                throw new Error('Google authentication is not enabled. Please use email/password to sign up or contact the administrator.')
+              }
               throw new Error(error.message)
             }
           } catch (error: any) {
+            console.error('Google auth error:', error)
             setError(error.message)
             setIsLoading(false)
           }

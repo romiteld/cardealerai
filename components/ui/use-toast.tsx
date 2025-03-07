@@ -1,3 +1,5 @@
+"use client";
+
 // This is a simplified version of the toast component from shadcn/ui
 import { useState, useEffect, createContext, useContext } from 'react';
 

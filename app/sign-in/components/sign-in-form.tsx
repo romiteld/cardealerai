@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientComponentClient } from '@/lib/supabase/client'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,10 +17,7 @@ export default function SignInForm() {
   const [error, setError] = useState<string | null>(null)
   
   // Initialize Supabase client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClientComponentClient()
   
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,20 +29,40 @@ export default function SignInForm() {
     const password = formData.get('password') as string
     
     try {
+      console.log('Attempting to sign in with email:', email)
+      
+      // Sign in with email and password
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
+        password
       })
       
       if (error) {
+        console.error('Sign in error:', error)
         throw new Error(error.message)
+      }
+      
+      console.log('Sign in successful, session:', data.session)
+      
+      // Save auth data to localStorage
+      if (data.session) {
+        localStorage.setItem('supabase.auth.token', JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token
+        }))
+        
+        // Also save a flag that indicates we're authenticated
+        localStorage.setItem('auth_status', 'authenticated')
       }
       
       // Get the redirect path or default to dashboard
       const redirectPath = searchParams.get('redirect') || '/dashboard'
-      router.push(redirectPath)
-      router.refresh()
+      console.log('Redirecting to:', redirectPath)
+      
+      // Hard redirect instead of using router.push for a complete page refresh
+      window.location.href = redirectPath
     } catch (error: any) {
+      console.error('Sign in exception:', error)
       setError(error.message)
     } finally {
       setIsLoading(false)
@@ -111,41 +128,15 @@ export default function SignInForm() {
         </div>
       </form>
       
-      <div className="relative flex items-center justify-center">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-gray-300 dark:border-gray-600" />
-        </div>
-        <span className="relative bg-white px-2 text-xs text-gray-500 dark:bg-slate-800 dark:text-gray-400">
-          Or continue with
-        </span>
+      <div className="text-center text-sm">
+        Don't have an account?{' '}
+        <Link 
+          href="/sign-up" 
+          className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          Sign up
+        </Link>
       </div>
-      
-      <Button
-        variant="outline"
-        type="button"
-        disabled={isLoading}
-        onClick={async () => {
-          setIsLoading(true)
-          try {
-            const { data, error } = await supabase.auth.signInWithOAuth({
-              provider: 'google',
-              options: {
-                redirectTo: `${window.location.origin}/api/auth/callback`,
-              },
-            })
-            
-            if (error) {
-              throw new Error(error.message)
-            }
-          } catch (error: any) {
-            setError(error.message)
-            setIsLoading(false)
-          }
-        }}
-      >
-        <Icons.google className="mr-2 h-4 w-4" />
-        Google
-      </Button>
     </div>
   )
 } 

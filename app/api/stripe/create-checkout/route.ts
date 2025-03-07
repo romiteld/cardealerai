@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 import { createCheckoutSession, SUBSCRIPTION_PLANS } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
   try {
     // Get the current user from Supabase
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 import { generateVehicleContent, VehicleInfo, GenerationOptions } from '@/lib/openai';
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {

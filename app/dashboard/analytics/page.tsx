@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 import { getDealershipAnalytics } from '@/lib/analytics';
 import AnalyticsClient from './client';
 import { ToastProvider } from '@/components/ui/use-toast';
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AnalyticsPage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {

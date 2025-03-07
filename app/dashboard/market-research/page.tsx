@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase/server';
 import MarketResearch from '@/components/MarketResearch';
 
 export const metadata: Metadata = {
@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MarketResearchPage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {

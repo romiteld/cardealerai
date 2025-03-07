@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import SignUpForm from './components/sign-up-form'
-import { createServerClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
   title: 'Sign Up | CarDealerAI',
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function SignUpPage() {
   // Check if user is already authenticated
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data } = await supabase.auth.getSession()
   
   // If already authenticated, redirect to dashboard

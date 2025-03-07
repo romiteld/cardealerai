@@ -34,7 +34,9 @@ import {
   Home,
   BarChart,
   Users,
-  MessageSquare
+  MessageSquare,
+  PanelLeft,
+  PanelRight
 } from "lucide-react"
 
 export type IconName = 
@@ -48,7 +50,12 @@ export type IconName =
   | 'home'
   | 'chart'
   | 'users'
-  | 'message';
+  | 'message'
+  | 'panelLeft'
+  | 'panelRight'
+  | 'car'
+  | 'camera'
+  | 'coins';
 
 export const Icons = {
   logo: Command,
@@ -85,6 +92,8 @@ export const Icons = {
   chart: BarChart,
   users: Users,
   message: MessageSquare,
+  panelLeft: PanelLeft,
+  panelRight: PanelRight,
   google: ({ ...props }) => (
     <svg
       aria-hidden="true"
