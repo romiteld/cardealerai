@@ -1,0 +1,71 @@
+:root {
+  --slider-width: 100%;
+  --slider-height: 100%;
+  --clip-width: 50%;
+  --handle-left: 50%;
+}
+
+.container {
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  user-select: none;
+  touch-action: none;
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.clipContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sliderHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: white;
+  cursor: ew-resize;
+  pointer-events: auto;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease-out;
+}
+
+.sliderHandle:hover,
+.sliderHandle:active {
+  transform: scaleX(2);
+}
+
+.sliderButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease-out;
+}
+
+.sliderButton:hover,
+.sliderButton:active {
+  transform: translate(-50%, -50%) scale(1.1);
+} 
