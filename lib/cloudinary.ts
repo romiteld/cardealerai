@@ -172,4 +172,176 @@ export async function deleteImage(publicId: string): Promise<boolean> {
     console.error('Error deleting image:', error);
     return false;
   }
+}
+
+/**
+ * Process batch of images with AI background removal or replacement
+ * @param imageIds Array of Cloudinary public IDs
+ * @param mode 'remove' or 'replace' background
+ * @param prompt Prompt for background replacement (if mode is 'replace')
+ * @returns Results for each processed image
+ */
+export async function processBatchBackground(
+  imageIds: string[],
+  mode: 'remove' | 'replace' = 'remove',
+  prompt: string = 'dealership showroom'
+) {
+  if (!imageIds || imageIds.length === 0) {
+    throw new Error('No image IDs provided');
+  }
+
+  // Cache-busting timestamp
+  const timestamp = new Date().getTime();
+  
+  // Track results
+  const results = [];
+  let successCount = 0;
+  let failCount = 0;
+
+  // Process each image
+  for (const publicId of imageIds) {
+    try {
+      // Verify resource exists
+      const resource = await cloudinary.api.resource(publicId);
+      
+      if (!resource) {
+        results.push({
+          originalId: publicId,
+          success: false,
+          error: 'Resource not found'
+        });
+        failCount++;
+        continue;
+      }
+      
+      // Determine transformations based on mode
+      let transformations = [];
+      let previewOptions: Array<Array<Record<string, any>>> = [];
+      
+      if (mode === 'remove') {
+        // Just remove background
+        transformations = [
+          { width: 1200, crop: 'scale' },
+          { effect: 'bgremoval' }
+        ];
+        
+        // Different preview options (transparent, white, gradient)
+        previewOptions = [
+          // Transparent background
+          [
+            { width: 1200, crop: 'scale' },
+            { effect: 'bgremoval' }
+          ],
+          // White background
+          [
+            { width: 1200, crop: 'scale' },
+            { background: 'white', effect: 'bgremoval' }
+          ],
+          // Light gradient background
+          [
+            { width: 1200, crop: 'scale' },
+            { background: 'linear_gradient:lightblue:white', effect: 'bgremoval' }
+          ]
+        ];
+      } else if (mode === 'replace') {
+        // Background replacement with generative fill
+        // Note: Requires Cloudinary AI Background Generator
+        
+        // Get colors based on prompt for fallback options
+        const colors = getColorsFromPrompt(prompt);
+        
+        // AI generative fill requires a padding crop mode
+        transformations = [
+          { width: 1200, height: 800, crop: 'pad', background: 'auto' },
+          { effect: 'generative-fill' }
+        ];
+        
+        // Different preview options based on prompt
+        previewOptions = [
+          // Generative fill
+          [
+            { width: 1200, height: 800, crop: 'pad', background: 'auto' },
+            { effect: 'generative-fill' }
+          ],
+          // Solid color from prompt
+          [
+            { width: 1200, crop: 'scale' },
+            { background: colors.primary, effect: 'bgremoval' }
+          ],
+          // Gradient based on prompt colors
+          [
+            { width: 1200, crop: 'scale' },
+            { background: `linear_gradient:${colors.primary}:${colors.secondary}`, effect: 'bgremoval' }
+          ]
+        ];
+      }
+      
+      // Generate preview URLs
+      const previewUrls = previewOptions.map(transformationSet => {
+        return cloudinary.url(publicId, {
+          secure: true,
+          transformation: transformationSet,
+          version: timestamp
+        });
+      });
+      
+      results.push({
+        originalId: publicId,
+        success: true,
+        previews: previewUrls
+      });
+      
+      successCount++;
+    } catch (error) {
+      console.error(`Error processing image ${publicId}:`, error);
+      results.push({
+        originalId: publicId,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      failCount++;
+    }
+  }
+  
+  return {
+    batchResults: results,
+    successCount,
+    failCount
+  };
+}
+
+/**
+ * Helper function to map prompts to color pairs
+ */
+function getColorsFromPrompt(prompt: string): { primary: string; secondary: string } {
+  const prompt_lower = prompt.toLowerCase();
+  
+  // Map common prompt terms to color pairs
+  if (prompt_lower.includes('luxury') || prompt_lower.includes('showroom')) {
+    return { primary: 'darkblue', secondary: 'black' };
+  }
+  if (prompt_lower.includes('beach') || prompt_lower.includes('ocean') || prompt_lower.includes('sea')) {
+    return { primary: 'azure', secondary: 'lightblue' };
+  }
+  if (prompt_lower.includes('sunset') || prompt_lower.includes('dusk')) {
+    return { primary: 'orange', secondary: 'red' };
+  }
+  if (prompt_lower.includes('mountain') || prompt_lower.includes('hill') || prompt_lower.includes('cliff')) {
+    return { primary: 'darkgreen', secondary: 'brown' };
+  }
+  if (prompt_lower.includes('desert') || prompt_lower.includes('sand')) {
+    return { primary: 'khaki', secondary: 'sandybrown' };
+  }
+  if (prompt_lower.includes('night') || prompt_lower.includes('dark')) {
+    return { primary: 'midnightblue', secondary: 'navy' };
+  }
+  if (prompt_lower.includes('snow') || prompt_lower.includes('winter')) {
+    return { primary: 'aliceblue', secondary: 'white' };
+  }
+  if (prompt_lower.includes('city') || prompt_lower.includes('urban')) {
+    return { primary: 'gray', secondary: 'darkgray' };
+  }
+  
+  // Default elegant background
+  return { primary: 'darkblue', secondary: 'black' };
 } 

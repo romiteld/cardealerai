@@ -1,0 +1,60 @@
+---
+description: tech-stack
+globs: 
+alwaysApply: false
+---
+# CarDealerAI Technology Stack
+
+## Frontend
+- **Framework**: Next.js 14+ (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **State Management**: React Context API and React Query
+- **Form Handling**: React Hook Form with Zod validation
+- **Component Library**: Custom components with Tailwind and Radix UI primitives
+- **Icons**: Lucide React
+- **Charts/Visualizations**: Recharts
+- **Date/Time**: date-fns
+- **HTTP Client**: Axios
+- **Testing**: Jest and React Testing Library
+- **Animations**: Framer Motion
+- **Maps**: Mapbox GL JS
+
+## Backend (API Routes)
+- **Runtime**: Next.js API Routes/Server Actions
+- **Language**: TypeScript
+- **Authentication**: Supabase Auth
+- **Database ORM**: Supabase Client
+- **File Storage**: Cloudinary
+- **Email Service**: SendGrid
+- **Payment Processing**: Stripe
+- **AI Integration**: OpenAI API
+- **Web Scraping**: Fire Crawl API
+
+## Database
+- **Primary Database**: PostgreSQL (via Supabase)
+- **Schema Management**: Supabase Migrations
+
+## Infrastructure
+- **Hosting**: Vercel
+- **Database Hosting**: Supabase
+- **Media Storage**: Cloudinary
+- **CDN**: Vercel Edge Network
+- **CI/CD**: Vercel Git Integration
+- **Monitoring**: Sentry for error tracking
+
+## External Services
+- **AI Image Processing**: Cloudinary AI
+- **Content Generation**: OpenAI GPT-4
+- **Payment Processing**: Stripe
+- **Social Media APIs**: Twitter/X, Facebook, Instagram
+- **Market Research**: Fire Crawl API
+- **Analytics**: Vercel Analytics
+
+## Development Tools
+- **IDE**: Cursor AI / VS Code
+- **Package Manager**: npm or pnpm
+- **Linting**: ESLint with TypeScript plugins
+- **Formatting**: Prettier
+- **Git Workflow**: GitHub Flow
+- **Environment Variables**: Vercel and .env files

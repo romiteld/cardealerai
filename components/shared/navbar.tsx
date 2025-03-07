@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { 
   Home, 
   Image, 
@@ -11,11 +11,20 @@ import {
   Grid, 
   CreditCard,
   Menu,
-  X
+  X,
+  LogOut,
+  User
 } from 'lucide-react'
-import { UserButton, useUser } from '@clerk/nextjs'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '../ui/button'
+import { createBrowserClient } from '@supabase/ssr'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu'
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar'
 
 interface NavItem {
   href: string;
@@ -42,8 +51,49 @@ const authNavItems: NavItem[] = [
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { user } = useUser()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  
+  // Initialize Supabase client
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => {
+    // Check for active session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setUser(session?.user || null)
+      setLoading(false)
+    }
+
+    checkSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/')
+    router.refresh()
+  }
+
+  const getInitials = (name: string = '') => {
+    return name.split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase() || 'U'
+  }
 
   const navItems = user ? authNavItems : publicNavItems
 
@@ -78,7 +128,43 @@ export default function Navbar() {
             })}
             {user && (
               <div className="flex items-center ml-4">
-                <UserButton afterSignOutUrl="/" />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="rounded-full p-0 h-8 w-8 overflow-hidden">
+                      <Avatar>
+                        <AvatarImage 
+                          src={user.user_metadata?.avatar_url || ''} 
+                          alt={user.user_metadata?.name || 'User'} 
+                        />
+                        <AvatarFallback className="bg-purple-600">
+                          {getInitials(user.user_metadata?.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="mt-1 w-56">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/profile" className="flex items-center">
+                        <User className="mr-2 h-4 w-4" />
+                        <span>Profile</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSignOut} className="text-red-500">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Sign out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+            {!user && !loading && (
+              <div className="flex items-center ml-4 space-x-2">
+                <Button variant="ghost" className="text-gray-300" asChild>
+                  <Link href="/sign-in">Sign In</Link>
+                </Button>
+                <Button className="bg-purple-600 hover:bg-purple-700" asChild>
+                  <Link href="/sign-up">Sign Up</Link>
+                </Button>
               </div>
             )}
           </nav>
@@ -123,8 +209,21 @@ export default function Navbar() {
               )
             })}
             {user && (
-              <div className="flex items-center py-3 px-3">
-                <UserButton afterSignOutUrl="/" />
+              <div className="px-3 py-2">
+                <Button variant="default" className="w-full justify-start text-left bg-red-600 hover:bg-red-700" onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+              </div>
+            )}
+            {!user && !loading && (
+              <div className="flex flex-col gap-2 px-3 py-2">
+                <Button variant="outline" className="w-full justify-center" asChild>
+                  <Link href="/sign-in">Sign In</Link>
+                </Button>
+                <Button className="w-full justify-center bg-purple-600 hover:bg-purple-700" asChild>
+                  <Link href="/sign-up">Sign Up</Link>
+                </Button>
               </div>
             )}
           </div>

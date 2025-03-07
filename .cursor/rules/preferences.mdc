@@ -1,0 +1,61 @@
+---
+description: coding preferences
+globs: 
+alwaysApply: false
+---
+
+# CarDealerAI Coding Preferences
+
+## Code Style
+
+### General
+- Use consistent and meaningful naming conventions
+- Prioritize readability and maintainability over brevity
+- Include JSDoc comments for functions and components
+- Maximum line length of 100 characters
+- Use 2-space indentation for all code
+
+### TypeScript/JavaScript
+- Use TypeScript for all new code
+- Prefer functional components over class components in React
+- Use arrow functions for callbacks
+- Prefer const over let, avoid var
+- Use async/await over Promises where possible
+- Use optional chaining (?.) and nullish coalescing (??) operators
+- Use template literals for string interpolation
+- Destructure objects and arrays when appropriate
+
+### CSS/Styling
+- Use Tailwind CSS for component styling
+- Follow utility-first approach
+- Extract common patterns to custom components
+- Use consistent spacing and sizing (multiples of 4px)
+- Use CSS variables for theme colors and dimensions
+- Use responsive design principles with mobile-first approach
+
+### Testing
+- Write tests for all critical functionality
+- Use React Testing Library for component tests
+- Use Jest for unit testing
+- Use meaningful test descriptions that explain the expected behavior
+
+## Error Handling
+- Use try/catch blocks for async operations
+- Provide meaningful error messages
+- Log errors with appropriate context
+- Handle edge cases explicitly
+- Implement graceful degradation for UI components
+
+## Performance Considerations
+- Memoize expensive calculations with useMemo and useCallback
+- Implement virtualization for long lists
+- Optimize and properly size images
+- Lazy load non-critical components
+- Implement proper caching strategies for API calls
+
+## Accessibility
+- Use semantic HTML elements
+- Include proper ARIA attributes
+- Ensure keyboard navigation
+- Maintain color contrast ratios
+- Provide alternative text for images

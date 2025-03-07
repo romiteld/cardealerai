@@ -1,189 +1,177 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { MessageSquare, X, Send, Loader2 } from 'lucide-react'
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/nextjs';
+import { useState, useEffect } from 'react'
+import { PanelRightOpen, PanelRightClose, SendHorizontal, Bot } from 'lucide-react'
+import { format } from 'date-fns'
+import { Button } from '../ui/button'
+import { createBrowserClient } from '@supabase/ssr'
 
 interface Message {
-  id: number
-  text: string
-  sender: 'user' | 'ai'
-  status?: 'sending' | 'error'
-}
-
-interface ChatResponse {
-  message: string;
-  error?: string;
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
 }
 
 export default function ChatAssistant() {
   const [isOpen, setIsOpen] = useState(false)
+  const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: 1,
-      text: "Hello! I'm your AI assistant. How can I help you today?",
-      sender: 'ai'
+      role: 'assistant',
+      content: 'Hello! I\'m your CarDealerAI assistant. How can I help you today?',
+      timestamp: new Date()
     }
   ])
-  const [input, setInput] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const lastMessageTimestamp = useRef<number>(Date.now())
+  const [loading, setLoading] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // Initialize Supabase client
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
-
-  const handleSend = async () => {
-    if (!input.trim() || isProcessing) return
-
-    // Rate limiting - 1 second between messages
-    const now = Date.now()
-    if (now - lastMessageTimestamp.current < 1000) {
-      return
+    // Check for active session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsAuthenticated(!!session)
     }
-    lastMessageTimestamp.current = now
 
+    checkSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
+
+  const handleSendMessage = async () => {
+    if (message.trim() === '') return
+
+    // Add user message
     const userMessage: Message = {
-      id: messages.length + 1,
-      text: input,
-      sender: 'user'
+      role: 'user',
+      content: message,
+      timestamp: new Date()
     }
 
     setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setIsProcessing(true)
+    setMessage('')
+    setLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: input,
-          history: messages.map(m => ({ text: m.text, sender: m.sender }))
-        }),
-      });
-
-      const data: ChatResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get response');
-      }
-
-      const aiResponse: Message = {
-        id: messages.length + 2,
-        text: data.message,
-        sender: 'ai'
-      }
-      setMessages(prev => [...prev, aiResponse])
+      // Call API for AI response here
+      // For demo purposes, just add a simulated response
+      setTimeout(() => {
+        const aiResponse: Message = {
+          role: 'assistant',
+          content: `I received your message: "${userMessage.content}". This is a placeholder response from the AI assistant.`,
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, aiResponse])
+        setLoading(false)
+      }, 1000)
     } catch (error) {
-      const errorMessage: Message = {
-        id: messages.length + 2,
-        text: 'Sorry, I encountered an error. Please try again.',
-        sender: 'ai',
-        status: 'error'
-      }
-      setMessages(prev => [...prev, errorMessage])
-      console.error('Chat error:', error)
-    } finally {
-      setIsProcessing(false)
+      console.error('Error getting AI response:', error)
+      setLoading(false)
     }
   }
 
   return (
-    <>
-      <ClerkProvider>
-        <SignedOut>
-          {/* Redirect logic */}
-          {/* Redirect logic should be handled at the page level or within a component that is part of the page */}
-        </SignedOut>
-        <SignedIn>
+    <div className="fixed bottom-6 right-6 z-50">
+      {isAuthenticated ? (
+        <>
           <Button
-            onClick={() => setIsOpen(true)}
-            className="fixed bottom-4 right-4 rounded-full w-12 h-12 p-0 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg z-50"
+            onClick={() => setIsOpen(!isOpen)}
+            className="h-12 w-12 rounded-full bg-purple-600 hover:bg-purple-700 shadow-lg p-0"
+            aria-label={isOpen ? 'Close chat' : 'Open chat'}
           >
-            <MessageSquare className="h-6 w-6" />
+            {isOpen ? (
+              <PanelRightClose className="h-6 w-6" />
+            ) : (
+              <PanelRightOpen className="h-6 w-6" />
+            )}
           </Button>
 
-          <AnimatePresence>
-            {isOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ duration: 0.2 }}
-                className="fixed bottom-20 right-4 w-96 h-[600px] bg-gray-800 rounded-lg shadow-xl flex flex-col overflow-hidden z-50"
-              >
-                {/* Header */}
-                <div className="p-4 bg-gradient-to-r from-purple-600 to-pink-600 flex justify-between items-center">
-                  <h3 className="text-white font-semibold">AI Assistant</h3>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsOpen(false)}
-                    className="text-white hover:bg-white/20"
+          {isOpen && (
+            <div className="absolute bottom-16 right-0 w-80 md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="flex items-center p-3 bg-purple-600 text-white">
+                <Bot className="h-5 w-5 mr-2" />
+                <h3 className="font-medium">CarDealerAI Assistant</h3>
+              </div>
+              
+              <div className="h-96 overflow-y-auto p-4 flex flex-col space-y-4">
+                {messages.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`flex flex-col ${
+                      msg.role === 'user' ? 'items-end' : 'items-start'
+                    }`}
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 p-4 overflow-y-auto">
-                  {messages.map((message) => (
                     <div
-                      key={message.id}
-                      className={`mb-4 flex ${
-                        message.sender === 'user' ? 'justify-end' : 'justify-start'
+                      className={`p-3 rounded-lg max-w-[80%] ${
+                        msg.role === 'user'
+                          ? 'bg-purple-600 text-white rounded-br-none'
+                          : 'bg-gray-200 dark:bg-gray-700 rounded-bl-none'
                       }`}
                     >
-                      <div
-                        className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                          message.sender === 'user'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-700 text-gray-100'
-                        }`}
-                      >
-                        {message.text}
-                      </div>
+                      {msg.content}
                     </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input */}
-                <div className="p-4 border-t border-gray-700">
-                  <div className="flex gap-2">
-                    <Input
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                      placeholder="Type your message..."
-                      disabled={isProcessing}
-                      className="flex-1 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-purple-400"
-                    />
-                    <Button
-                      onClick={handleSend}
-                      disabled={isProcessing || !input.trim()}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <span className="text-xs text-gray-500 mt-1">
+                      {format(msg.timestamp, 'p')}
+                    </span>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </SignedIn>
-      </ClerkProvider>
-    </>
+                ))}
+                {loading && (
+                  <div className="flex items-center space-x-2 text-gray-500">
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '600ms' }}></div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-3 border-t dark:border-gray-700">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <input
+                    type="text"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 p-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={loading || message.trim() === ''}
+                    className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md"
+                  >
+                    <SendHorizontal className="h-5 w-5" />
+                  </Button>
+                </form>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <Button
+          onClick={() => window.location.href = '/sign-in'}
+          className="h-12 w-12 rounded-full bg-purple-600 hover:bg-purple-700 shadow-lg p-0"
+          aria-label="Login to chat"
+        >
+          <Bot className="h-6 w-6" />
+        </Button>
+      )}
+    </div>
   )
 }

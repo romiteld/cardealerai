@@ -1,73 +1,39 @@
 import { NextResponse } from 'next/server';
-import { batchEnhanceImages, enhancementPresets } from '../../lib/cloudinary';
+import { processBatchBackground } from '@/lib/cloudinary';
 
 interface BatchEnhanceRequest {
-  publicIds: string[];
-  preset?: keyof typeof enhancementPresets;
+  imageIds: string[];
+  mode?: 'remove' | 'replace';
+  prompt?: string;
 }
-
-type EnhanceResult = {
-  status: 'success' | 'error';
-  publicId: string;
-  url?: string;
-  public_id?: string;
-  width?: number;
-  height?: number;
-  eager?: any;
-  error?: string;
-};
-
-type CloudinaryResult = {
-  secure_url: string;
-  public_id: string;
-  width: number;
-  height: number;
-  eager: any;
-};
 
 export async function POST(request: Request) {
   try {
-    const { publicIds, preset } = await request.json() as BatchEnhanceRequest;
+    const { imageIds, mode = 'remove', prompt = 'dealership showroom' } = await request.json() as BatchEnhanceRequest;
 
-    if (!Array.isArray(publicIds) || publicIds.length === 0) {
+    if (!Array.isArray(imageIds) || imageIds.length === 0) {
       return NextResponse.json(
-        { error: 'At least one public ID is required' },
+        { error: 'At least one image ID is required' },
         { status: 400 }
       );
     }
 
-    if (preset && !(preset in enhancementPresets)) {
-      return NextResponse.json(
-        { error: 'Invalid enhancement preset' },
-        { status: 400 }
-      );
-    }
+    // Process images in batch with the new function
+    const result = await processBatchBackground(imageIds, mode, prompt);
 
-    // Process images in batch
-    const results = await batchEnhanceImages(publicIds, preset);
-    // Format results
-    const formattedResults = results.map((result, index) => ({
-      status: 'success',
-      publicId: publicIds[index],
-      url: result.secure_url,
-      public_id: result.public_id,
-      width: result.width,
-      height: result.height,
-      eager: result.eager
-    }));
-
+    // Return the batch results
     return NextResponse.json({
-      results: formattedResults,
+      batchResults: result.batchResults,
       summary: {
-        total: publicIds.length,
-        successful: formattedResults.filter((r) => (r as EnhanceResult).status === 'success').length,
-        failed: formattedResults.filter((r) => (r as EnhanceResult).status === 'error').length,
+        total: imageIds.length,
+        successful: result.successCount,
+        failed: result.failCount,
       }
     });
   } catch (error) {
     console.error('Error processing batch:', error);
     return NextResponse.json(
-      { error: 'Failed to process image batch' },
+      { error: 'Failed to process image batch', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

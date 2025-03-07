@@ -1,0 +1,108 @@
+---
+description: workflow
+globs: 
+alwaysApply: false
+---
+# CarDealerAI Workflow Preferences
+
+## Project Organization
+
+### Directory Structure
+Follow the Next.js App Router structure:
+- `/app`: Page routes and layouts
+- `/components`: Reusable UI components
+- `/lib`: Utility functions and service integrations
+- `/hooks`: Custom React hooks
+- `/types`: TypeScript type definitions
+- `/styles`: Global styles and Tailwind configuration
+- `/public`: Static assets
+- `/tests`: Test files
+
+### Component Organization
+- Group components by feature or domain
+- Create index files for clean exports
+- Colocate related files (component, styles, tests)
+- Use barrel exports for cleaner imports
+
+## Development Workflow
+
+### Git Workflow
+- Use feature branches for all new work
+- Name branches with format: `feature/feature-name` or `fix/bug-name`
+- Create meaningful commit messages with prefix (feat, fix, chore, docs, etc.)
+- Squash commits before merging to main
+- Delete branches after merging
+
+### Pull Request Process
+- Create descriptive PR titles
+- Include a summary of changes
+- Reference related issues or tickets
+- Request reviews from appropriate team members
+- Address all comments before merging
+- Ensure all tests pass before merging
+
+### Code Review Guidelines
+- Focus on logic, architecture, and performance
+- Check for edge cases and error handling
+- Verify styling on different screen sizes
+- Ensure consistent code style
+- Provide constructive feedback
+
+## Testing Strategy
+
+### Types of Tests
+- Unit tests for utilities and pure functions
+- Component tests for UI elements
+- Integration tests for complex workflows
+- End-to-end tests for critical user journeys
+
+### Testing Practices
+- Write tests during feature development, not after
+- Aim for high coverage on critical paths
+- Use mock data that closely resembles production
+- Test both success and error states
+- Verify accessibility during testing
+
+## Deployment Pipeline
+
+### Environments
+- Development: Local environment
+- Staging: Deployment from staging branch
+- Production: Deployment from main branch
+
+### Deployment Process
+- All commits to main trigger a staging deployment
+- Manual promotion from staging to production
+- Feature branches can have preview deployments
+- Run comprehensive tests before promoting to production
+- Perform database migrations as separate steps
+
+## Documentation
+
+### Code Documentation
+- Document complex logic with inline comments
+- Add JSDoc for exported functions and components
+- Update README files for major modules
+- Document APIs with OpenAPI/Swagger
+
+### Project Documentation
+- Maintain up-to-date README with setup instructions
+- Document architecture decisions in ADRs
+- Keep API documentation current
+- Document subscription tier differences and limitations
+
+## Performance Monitoring
+
+### Metrics to Track
+- Page load times
+- API response times
+- Error rates
+- Core Web Vitals
+- Image processing times
+- Batch operation performance
+
+### Alerting
+- Set up alerts for critical errors
+- Monitor authentication failures
+- Track payment processing issues
+- Watch for unusual API usage patterns
