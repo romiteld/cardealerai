@@ -1,10 +1,20 @@
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
+// Configure Cloudinary with correct environment variables
 cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Log configuration status for debugging
+const cloudinaryConfigStatus = {
+  cloud_name_configured: !!cloudinary.config().cloud_name,
+  api_key_configured: !!cloudinary.config().api_key,
+  api_secret_configured: !!cloudinary.config().api_secret
+};
+
+console.log('Cloudinary configuration status:', cloudinaryConfigStatus);
 
 export interface CloudinaryUploadResult {
   public_id: string;

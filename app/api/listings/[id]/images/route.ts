@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 // In a real app, we would interact with the database
 // For now, we'll use the same mock data and update it in memory
@@ -111,153 +113,64 @@ export async function PUT(
   try {
     const { id } = params;
     const body = await request.json();
-    
-    console.log(`Updating images for listing ${id}`);
-    console.log('Request body:', body);
-    
-    // Validate request body
-    if (!body.selectedImages && !body.selectedImageUrls) {
+    const { images } = body;
+
+    if (!id) {
       return NextResponse.json(
-        { error: 'No image data provided' },
+        { error: 'Listing ID is required' },
         { status: 400 }
       );
     }
-    
-    // Find the listing
-    const listing = mockListings.find(listing => listing.id === id);
-    
-    if (!listing) {
+
+    if (!images || !Array.isArray(images)) {
       return NextResponse.json(
-        { error: 'Listing not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Handle various image update formats
-    const imageData = body.selectedImages || body.selectedImageUrls || [];
-    console.log('Processing imageData:', imageData);
-    
-    // Track the updates for response
-    const updates = {
-      added: 0,
-      updated: 0,
-      unchanged: 0,
-      current_count: listing.images.length
-    };
-    
-    // Update the listing's images
-    // Different handling based on the data format
-    if (Array.isArray(imageData)) {
-      if (imageData.length > 0) {
-        // Check if we're getting a batch of updates or a complete replacement
-        const isBatchUpdate = body.mode === 'batch';
-        
-        // For batch updates, we'll add to or update existing images rather than replacing
-        if (isBatchUpdate) {
-          // Process each image in the batch
-          for (const item of imageData) {
-            if (typeof item === 'string') {
-              // It's a URL string
-              const publicId = item.split('/').pop()?.split('.')[0] || 'unknown';
-              const existingIndex = listing.images.findIndex(img => img.publicId === publicId);
-              
-              if (existingIndex >= 0) {
-                // Update existing
-                listing.images[existingIndex].url = item;
-                updates.updated++;
-              } else {
-                // Add new
-                listing.images.push({
-                  url: item,
-                  publicId
-                });
-                updates.added++;
-              }
-            } else if (item.originalId && item.enhancedUrl) {
-              // It's an { originalId, enhancedUrl } object
-              const existingIndex = listing.images.findIndex(img => img.publicId === item.originalId);
-              
-              if (existingIndex >= 0) {
-                // Update existing
-                listing.images[existingIndex].url = item.enhancedUrl;
-                updates.updated++;
-              } else {
-                // Add new
-                listing.images.push({
-                  url: item.enhancedUrl,
-                  publicId: item.originalId
-                });
-                updates.added++;
-              }
-            } else if (item.url && item.publicId) {
-              // It's an { url, publicId } object
-              const existingIndex = listing.images.findIndex(img => img.publicId === item.publicId);
-              
-              if (existingIndex >= 0) {
-                // Update existing
-                listing.images[existingIndex] = item;
-                updates.updated++;
-              } else {
-                // Add new
-                listing.images.push(item);
-                updates.added++;
-              }
-            }
-          }
-        } else {
-          // Complete replacement - we're getting the full image set
-          const oldCount = listing.images.length;
-          
-          if (typeof imageData[0] === 'string') {
-            // Array of image URLs
-            listing.images = imageData.map(url => ({
-              url,
-              publicId: url.split('/').pop()?.split('.')[0] || 'unknown'
-            }));
-          } else if (imageData[0].originalId && imageData[0].enhancedUrl) {
-            // Array of { originalId, enhancedUrl } objects
-            listing.images = imageData.map(item => ({
-              url: item.enhancedUrl,
-              publicId: item.originalId
-            }));
-          } else if (imageData[0].url) {
-            // Array of { url, publicId } objects
-            listing.images = imageData;
-          } else {
-            return NextResponse.json(
-              { error: 'Invalid image data format' },
-              { status: 400 }
-            );
-          }
-          
-          updates.updated = Math.min(oldCount, listing.images.length);
-          updates.added = Math.max(0, listing.images.length - oldCount);
-        }
-      } else {
-        // Empty array - clear images
-        updates.updated = listing.images.length;
-        listing.images = [];
-      }
-    } else {
-      return NextResponse.json(
-        { error: 'Image data must be an array' },
+        { error: 'Images array is required' },
         { status: 400 }
       );
     }
-    
-    console.log(`Updated listing images:`, listing.images);
-    updates.current_count = listing.images.length;
-    
+
+    // Get the authenticated user
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Update the listing's images in the database
+    // This is a mock implementation - adjust to your actual data model
+    console.log(`Updating images for listing ${id}:`, images);
+
+    // In a real implementation, you would update your database
+    // For example with Supabase:
+    const { error } = await supabase
+      .from('listings')
+      .update({ 
+        images: images,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Error updating images:', error);
+      return NextResponse.json(
+        { error: 'Failed to update images' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      images: listing.images,
-      count: listing.images.length,
-      updates
+      message: 'Images updated successfully'
     });
   } catch (error) {
-    console.error('Error updating listing images:', error);
+    console.error('Error in images update API:', error);
     return NextResponse.json(
-      { error: 'An unexpected error occurred' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import { toast } from 'react-hot-toast';
 
 interface ListingFormProps {
   initialData?: any;
@@ -25,7 +26,9 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [listingId, setListingId] = useState<string | null>(initialData?.id || null);
-  const [uploadedImages, setUploadedImages] = useState<any[]>(initialData?.images || []);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; publicId: string }>>(
+    initialData?.images || []
+  );
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
@@ -48,6 +51,7 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formHasChanges, setFormHasChanges] = useState(false);
   
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -67,8 +71,24 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
   };
   
   const handleUploadComplete = (results: any[]) => {
+    console.log('Upload complete:', results);
+    
+    try {
+      localStorage.removeItem(`listing_images_${listingId || 'new'}`);
+    } catch (error) {
+      console.error('Failed to clear localStorage:', error);
+    }
+    
     setUploadedImages(results);
-    setStep(2);
+    
+    setFormData(prev => ({
+      ...prev,
+      images: results
+    }));
+    
+    if (results.length > 0) {
+      setFormHasChanges(true);
+    }
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -107,6 +127,72 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
         delete newErrors[name];
         return newErrors;
       });
+    }
+  };
+  
+  const handleImageDataChange = (newImageData: Array<{ url: string; publicId: string }>) => {
+    console.log('Image data changed:', newImageData);
+    
+    setFormHasChanges(true);
+    
+    setUploadedImages(newImageData);
+    
+    setFormData(prev => ({
+      ...prev,
+      images: newImageData
+    }));
+    
+    try {
+      localStorage.setItem(`listing_images_${listingId || 'new'}`, JSON.stringify(newImageData));
+    } catch (error) {
+      console.error('Failed to save to localStorage:', error);
+    }
+    
+    if (mode === 'edit' && listingId) {
+      saveImageChanges(listingId, newImageData);
+    }
+  };
+  
+  useEffect(() => {
+    try {
+      const savedImages = localStorage.getItem(`listing_images_${listingId || 'new'}`);
+      if (savedImages) {
+        const parsedImages = JSON.parse(savedImages);
+        if (parsedImages.length > 0 && 
+            (uploadedImages.length === 0 || 
+             JSON.stringify(parsedImages) !== JSON.stringify(uploadedImages))) {
+          console.log('Restoring saved images from localStorage:', parsedImages);
+          setUploadedImages(parsedImages);
+          setFormData(prev => ({
+            ...prev,
+            images: parsedImages
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring images from localStorage:', error);
+    }
+  }, [listingId]);
+  
+  const saveImageChanges = async (id: string, imageData: Array<{ url: string; publicId: string }>) => {
+    try {
+      const response = await fetch(`/api/listings/${id}/images`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: imageData
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to update images on server');
+      } else {
+        console.log('Images updated successfully on server');
+      }
+    } catch (error) {
+      console.error('Error saving image changes:', error);
     }
   };
   
@@ -244,39 +330,117 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
     }
   };
   
+  const saveCurrentState = () => {
+    if (formHasChanges) {
+      console.log('Saving current form state');
+      try {
+        localStorage.setItem(`listing_form_${listingId || 'new'}`, JSON.stringify(formData));
+        localStorage.setItem(`listing_images_${listingId || 'new'}`, JSON.stringify(uploadedImages));
+      } catch (error) {
+        console.error('Failed to save form to localStorage:', error);
+      }
+      
+      setFormHasChanges(false);
+    }
+  };
+  
+  const changeStep = (newStep: number) => {
+    saveCurrentState();
+    
+    if (newStep > step) {
+      if (step === 1 && newStep === 2) {
+        if (uploadedImages.length === 0) {
+          toast.error('Please upload at least one image before proceeding');
+          return;
+        }
+      }
+      
+      if (step === 2 && newStep === 3) {
+        if (!listingId) {
+          toast.error('Please complete the details form before proceeding to enhancement');
+          return;
+        }
+      }
+    }
+    
+    setStep(newStep);
+  };
+  
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="container max-w-5xl mx-auto py-8 px-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">{mode === 'create' ? 'Add New Vehicle' : `Edit Vehicle: ${formData.title}`}</h1>
+        <Button
+          variant="outline"
+          onClick={() => router.push('/dashboard')}
+        >
+          Back to Dashboard
+        </Button>
+      </div>
+      
+      {/* Enhanced stepper with clickable steps */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">
-          {mode === 'create' ? 'Create New Listing' : 'Edit Listing'}
-        </h1>
+        <div className="relative flex justify-between items-center mb-4">
+          {/* Step line */}
+          <div className="absolute left-0 right-0 h-1 bg-gray-200 top-1/2 transform -translate-y-1/2"></div>
+          
+          {/* Step 1: Upload */}
+          <button 
+            onClick={() => changeStep(1)}
+            className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center ${
+              step === 1 ? 'bg-blue-500 text-white' : (
+                step > 1 ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-500'
+              )
+            }`}
+            type="button"
+          >
+            1
+          </button>
+          
+          {/* Step 2: Details */}
+          <button 
+            onClick={() => {
+              // Only allow proceeding to step 2 if there are images
+              if (uploadedImages.length > 0) {
+                changeStep(2);
+              } else {
+                toast.error('Please upload at least one image before proceeding');
+              }
+            }}
+            className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center ${
+              step === 2 ? 'bg-blue-500 text-white' : (
+                step > 2 ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-500'
+              )
+            }`}
+            type="button"
+          >
+            2
+          </button>
+          
+          {/* Step 3: Enhance */}
+          <button 
+            onClick={() => {
+              // Only allow proceeding to step 3 if we have a listing ID
+              if (listingId) {
+                changeStep(3);
+              } else {
+                toast.error('Please complete step 2 before proceeding to enhancement');
+              }
+            }}
+            className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center ${
+              step === 3 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+            }`}
+            type="button"
+          >
+            3
+          </button>
+        </div>
         
-        {/* Step progress bar */}
-        <div className="mt-4">
-          <div className="flex items-center">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              step >= 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            }`}>
-              1
-            </div>
-            <div className={`h-1 w-24 ${step >= 2 ? 'bg-blue-500' : 'bg-gray-200'}`}></div>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              step >= 2 ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            }`}>
-              2
-            </div>
-            <div className={`h-1 w-24 ${step >= 3 ? 'bg-blue-500' : 'bg-gray-200'}`}></div>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              step >= 3 ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            }`}>
-              3
-            </div>
-          </div>
-          <div className="flex justify-between mt-2 text-sm">
-            <div className="w-10 text-center">Upload</div>
-            <div className="w-10 text-center">Details</div>
-            <div className="w-10 text-center">Enhance</div>
-          </div>
+        {/* Step labels */}
+        <div className="flex justify-between text-sm">
+          <span className={step === 1 ? 'font-bold text-blue-500' : ''}>Upload</span>
+          <span className={step === 2 ? 'font-bold text-blue-500' : ''}>Details</span>
+          <span className={step === 3 ? 'font-bold text-blue-500' : ''}>Enhance</span>
         </div>
       </div>
       
@@ -633,7 +797,7 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
             <div className="pt-4 border-t flex justify-end space-x-4">
               <Button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => changeStep(1)}
                 variant="outline"
               >
                 Back
@@ -661,11 +825,12 @@ export default function ListingForm({ initialData, mode }: ListingFormProps) {
           <BackgroundProcessor
             listingId={listingId}
             imageData={uploadedImages}
+            onImageDataChange={handleImageDataChange}
           />
           
           <div className="mt-6 pt-4 border-t flex justify-between">
             <Button
-              onClick={() => setStep(2)}
+              onClick={() => changeStep(2)}
               variant="outline"
             >
               Back to Details

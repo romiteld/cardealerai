@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Progress } from './ui/progress';
+import { toast } from 'react-hot-toast';
 
 interface BatchUploaderProps {
   initialImages?: any[];
@@ -29,39 +30,43 @@ export default function BatchUploader({
   const [error, setError] = useState<string | null>(null);
   
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    // Validate file size and type
-    const validFiles = acceptedFiles.filter(file => {
-      // Check max size
-      if (file.size > maxSize * 1024 * 1024) {
-        setError(`File "${file.name}" exceeds the ${maxSize}MB size limit`);
-        return false;
-      }
-      
-      // Check valid types
-      if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
-        setError(`File "${file.name}" has an unsupported format`);
-        return false;
-      }
-      
-      return true;
-    });
+    const newFiles = acceptedFiles.map(file => Object.assign(file, {
+      preview: URL.createObjectURL(file)
+    }));
     
-    // Check if adding these files would exceed the maxFiles limit
-    if (files.length + validFiles.length + existingImages.length > maxFiles) {
-      setError(`You can upload a maximum of ${maxFiles} images. You're attempting to add ${validFiles.length} more images to the existing ${files.length + existingImages.length}.`);
+    const totalFiles = files.length + newFiles.length + existingImages.length;
+    
+    if (totalFiles > maxFiles) {
+      setError(`Maximum ${maxFiles} files allowed. You tried to add ${totalFiles} files.`);
       return;
     }
     
-    setFiles(prev => [...prev, ...validFiles]);
+    // Check for file size
+    const oversizedFiles = newFiles.filter(file => file.size > maxSize * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      setError(`Some files exceed the ${maxSize}MB size limit and were rejected.`);
+      
+      // Filter out oversized files
+      const validFiles = newFiles.filter(file => file.size <= maxSize * 1024 * 1024);
+      setFiles(prev => [...prev, ...validFiles]);
+      return;
+    }
+    
+    setFiles(prev => [...prev, ...newFiles]);
     setError(null);
   }, [files.length, existingImages.length, maxFiles, maxSize]);
   
+  // Fix the refs and drag active state
+  const dropzoneRef = React.useRef(null);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.webp']
+      'image/jpeg': [],
+      'image/png': [],
+      'image/webp': []
     },
-    maxFiles
+    maxFiles,
+    maxSize: maxSize * 1024 * 1024 // Convert MB to bytes
   });
   
   const handleUpload = async () => {
@@ -146,10 +151,82 @@ export default function BatchUploader({
   };
   
   const removeExistingImage = (index: number) => {
-    const newImages = [...existingImages];
-    newImages.splice(index, 1);
-    setExistingImages(newImages);
-    onUploadComplete(newImages);
+    try {
+      // Create a deep copy of the existing images array
+      const updatedImages = JSON.parse(JSON.stringify(existingImages));
+      
+      // Get the image being removed (for logging)
+      const removedImage = updatedImages[index];
+      console.log('Removing image:', removedImage);
+      
+      // Remove the image at the specified index
+      updatedImages.splice(index, 1);
+      
+      // Update the local state first to ensure immediate UI feedback
+      setExistingImages(updatedImages);
+      console.log('Updated images array after removal:', updatedImages);
+      
+      // Notify the parent component about the change after a small delay
+      // This ensures the DOM has updated before any potential re-renders from parent
+      setTimeout(() => {
+        try {
+          onUploadComplete(updatedImages);
+          toast.success(`Image ${index + 1} deleted successfully`);
+        } catch (error) {
+          console.error('Error in callback after image deletion:', error);
+          toast.error('Error updating parent component after deletion');
+        }
+      }, 50);
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast.error('Failed to remove image');
+    }
+  };
+  
+  // Update the handleDeleteImage function to completely prevent any form submission or navigation
+  const handleDeleteImage = (index: number, event?: React.MouseEvent) => {
+    // Prevent all default behaviors that might cause navigation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    // Use a custom confirmation dialog if available
+    if (confirm(`Are you sure you want to delete image ${index + 1}?`)) {
+      // Wrap in setTimeout to ensure event handling is complete before deletion logic runs
+      setTimeout(() => {
+        removeExistingImage(index);
+      }, 10);
+    }
+  };
+  
+  // Fix the useEffect to use a different approach to access dropzone internals
+  useEffect(() => {
+    // If existingImages changes (like after a deletion), reset the internal files state
+    setFiles([]);
+    // We can't directly access dropzone methods - instead reset files state
+    // and clear any UI indicators
+  }, [existingImages.length]);
+
+  // Update the handleSubmit function to fix any file handling issues
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Don't proceed if already uploading or no files
+    if (uploading || files.length === 0) return;
+    
+    handleUpload();
+  };
+
+  // Similarly, update the resetUploader function
+  const resetUploader = () => {
+    setFiles([]);
+    setProgress(0);
+    setError(null);
+    setUploading(false);
+    
+    // Just reset the files - we can't directly access dropzone methods
+    // in a type-safe way
   };
   
   return (
@@ -170,11 +247,23 @@ export default function BatchUploader({
                 />
                 <button
                   type="button"
-                  onClick={() => removeExistingImage(index)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(event) => handleDeleteImage(index, event)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-opacity"
                   aria-label={`Remove image ${index + 1}`}
                 >
                   ×
+                </button>
+                
+                {/* Add a delete button below the image for more visibility */}
+                <button
+                  type="button"
+                  onClick={(event) => handleDeleteImage(index, event)}
+                  className="w-full mt-1 py-1 bg-red-100 text-red-700 text-xs rounded flex items-center justify-center hover:bg-red-200 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Delete
                 </button>
               </div>
             ))}
@@ -188,6 +277,7 @@ export default function BatchUploader({
         className={`border-2 border-dashed p-8 rounded-md text-center cursor-pointer transition-colors ${
           isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
         }`}
+        ref={dropzoneRef}
       >
         <input {...getInputProps()} />
         <div className="space-y-2">
@@ -261,7 +351,7 @@ export default function BatchUploader({
           {/* Upload button */}
           {!uploading && (
             <Button 
-              onClick={handleUpload}
+              onClick={handleSubmit}
               className="bg-blue-500 hover:bg-blue-600 text-white"
             >
               Upload Files
