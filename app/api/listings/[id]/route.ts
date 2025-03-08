@@ -55,30 +55,50 @@ const mockListings = [
   }
 ];
 
+// Helper function to add CORS headers to a response
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
+// CORS preflight request handler
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Make sure params.id exists
     const { id } = params;
+    if (!id) {
+      return addCorsHeaders(NextResponse.json(
+        { error: 'Listing ID is required' },
+        { status: 400 }
+      ));
+    }
     
     // Find the listing in our mock data
     const listing = mockListings.find(listing => listing.id === id);
     
     if (!listing) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Listing not found' },
         { status: 404 }
-      );
+      ));
     }
     
-    return NextResponse.json(listing);
+    return addCorsHeaders(NextResponse.json(listing));
   } catch (error: any) {
     console.error('Error fetching listing:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }
-    );
+    ));
   }
 }
 
@@ -94,10 +114,10 @@ export async function PUT(
     const listingIndex = mockListings.findIndex(listing => listing.id === id);
     
     if (listingIndex === -1) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Listing not found' },
         { status: 404 }
-      );
+      ));
     }
     
     // In a real app, we would update the database
@@ -111,13 +131,13 @@ export async function PUT(
       updatedAt: new Date().toISOString()
     };
     
-    return NextResponse.json(updatedListing);
+    return addCorsHeaders(NextResponse.json(updatedListing));
   } catch (error: any) {
     console.error('Error updating listing:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }
-    );
+    ));
   }
 }
 
@@ -132,24 +152,24 @@ export async function DELETE(
     const listingIndex = mockListings.findIndex(listing => listing.id === id);
     
     if (listingIndex === -1) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Listing not found' },
         { status: 404 }
-      );
+      ));
     }
     
     // In a real app, we would delete from the database
     // For now, just return a success message
     
-    return NextResponse.json({
+    return addCorsHeaders(NextResponse.json({
       success: true,
       message: `Listing ${id} has been deleted`
-    });
+    }));
   } catch (error: any) {
     console.error('Error deleting listing:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }
-    );
+    ));
   }
 } 

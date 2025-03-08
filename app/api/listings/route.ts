@@ -55,6 +55,19 @@ const mockListings = [
   }
 ];
 
+// Helper function to add CORS headers to a response
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
+// CORS preflight request handler
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -64,25 +77,26 @@ export async function GET(request: Request) {
     
     // Filter by status if provided
     let filteredListings = mockListings;
-    if (status) {
+    if (status && status !== 'all') {
       filteredListings = mockListings.filter(listing => listing.status === status);
     }
     
     // Apply pagination
     const paginatedListings = filteredListings.slice(offset, offset + limit);
     
-    return NextResponse.json({
+    // Return response with CORS headers
+    return addCorsHeaders(NextResponse.json({
       data: paginatedListings,
       count: filteredListings.length,
       limit,
       offset
-    });
+    }));
   } catch (error: any) {
     console.error('Error fetching listings:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }
-    );
+    ));
   }
 }
 
@@ -95,17 +109,18 @@ export async function POST(request: Request) {
     // Generate a mock ID for the new listing
     const mockId = `listing_${Math.random().toString(36).substring(2, 10)}`;
     
-    return NextResponse.json({
+    // Return response with CORS headers
+    return addCorsHeaders(NextResponse.json({
       id: mockId,
       ...body,
       status: body.status || 'draft',
       createdAt: new Date().toISOString()
-    });
+    }));
   } catch (error: any) {
     console.error('Error creating listing:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }
-    );
+    ));
   }
 } 

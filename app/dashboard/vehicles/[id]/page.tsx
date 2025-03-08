@@ -3,6 +3,26 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Edit, Trash2, Share } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
+import { getVehicleListingById } from '@/lib/actions/listings'
+
+// Special Next.js 14+ function to generate static metadata based on dynamic route params
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  try {
+    const id = params.id;
+    const vehicle = await getVehicleListingById(id);
+    
+    return {
+      title: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model} | CarDealerAI` : "Vehicle Not Found | CarDealerAI",
+      description: vehicle ? `View and manage details for your ${vehicle.year} ${vehicle.make} ${vehicle.model}` : "This vehicle listing could not be found"
+    }
+  } catch (error) {
+    console.error("Error generating metadata:", error);
+    return {
+      title: "Vehicle Details | CarDealerAI",
+      description: "View and manage detailed information about your vehicle listing"
+    }
+  }
+}
 
 interface VehicleParams {
   params: {
@@ -10,26 +30,19 @@ interface VehicleParams {
   }
 }
 
-export default async function VehicleDetailsPage({ params }: VehicleParams) {
-  const vehicleId = params.id
+// Server action to fetch vehicle details - this isolates the route params issue
+async function getVehicleDetails(id: string) {
+  if (!id) {
+    throw new Error("Vehicle ID is required");
+  }
   
-  // In a real app, we would fetch the vehicle data from the API
-  // For now, we'll try to fetch from the mock API
-  let vehicle
   try {
-    const response = await fetch(`/api/listings/${vehicleId}`, { cache: 'no-store' })
-    if (!response.ok) {
-      if (response.status === 404) {
-        notFound()
-      }
-      throw new Error('Failed to fetch vehicle details')
-    }
-    vehicle = await response.json()
+    return await getVehicleListingById(id);
   } catch (error) {
-    console.error(`Error fetching vehicle ${vehicleId}:`, error)
-    // For demo purposes, we'll create a mock vehicle if the API call fails
-    vehicle = {
-      id: vehicleId,
+    console.error(`Error fetching vehicle ${id}:`, error);
+    // For demo purposes, return a mock vehicle if the fetch fails
+    return {
+      id,
       title: '2023 Honda Civic Touring',
       make: 'Honda',
       model: 'Civic',
@@ -51,8 +64,19 @@ export default async function VehicleDetailsPage({ params }: VehicleParams) {
         }
       ],
       createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
-    }
+    };
   }
+}
+
+export default async function VehicleDetailsPage({ params }: VehicleParams) {
+  // First extract the ID safely from params
+  const id = params?.id;
+  if (!id) {
+    notFound();
+  }
+  
+  // Use the local server action to avoid direct params access
+  const vehicle = await getVehicleDetails(id);
   
   // Get dealer information
   const supabase = await createServerClient()
@@ -81,7 +105,7 @@ export default async function VehicleDetailsPage({ params }: VehicleParams) {
             <Share className="h-4 w-4" />
             <span>Share</span>
           </Button>
-          <Link href={`/dashboard/vehicles/${vehicleId}/edit`}>
+          <Link href={`/dashboard/vehicles/${id}/edit`}>
             <Button variant="outline" size="sm" className="flex items-center gap-1">
               <Edit className="h-4 w-4" />
               <span>Edit</span>

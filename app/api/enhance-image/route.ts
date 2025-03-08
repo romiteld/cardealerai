@@ -17,6 +17,7 @@ cloudinary.config({
 
 export async function POST(request: Request) {
   try {
+    console.log('enhance-image POST request received');
     // Check if the request is multipart/form-data
     const contentType = request.headers.get('content-type') || '';
     
@@ -26,41 +27,65 @@ export async function POST(request: Request) {
       const file = formData.get('file') as File;
       
       if (!file) {
+        console.error('No file provided in the request');
         return NextResponse.json(
           { error: 'No file provided' },
           { status: 400 }
         );
       }
 
+      console.log(`Processing file: ${file.name}, size: ${file.size} bytes`);
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: 'car-images',
-            resource_type: 'auto',
-            allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-          },
-          (error, result) => {
-            if (error) {
-              console.error('Cloudinary upload error:', error);
-              reject(error);
-            } else {
-              resolve(result as CloudinaryUploadResult);
+      // If Cloudinary is not configured, return a mock response
+      if (!process.env.CLOUDINARY_API_KEY || !process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) {
+        console.warn("Cloudinary credentials not set, using mock response");
+        
+        // Return a mock response for development
+        return NextResponse.json({
+          url: `https://example.com/mock-upload/${file.name}`,
+          public_id: `mock-car-images/${file.name.split('.')[0]}`,
+          width: 800,
+          height: 600,
+        });
+      }
+
+      try {
+        const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'car-images',
+              resource_type: 'auto',
+              allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+            },
+            (error, result) => {
+              if (error) {
+                console.error('Cloudinary upload error:', error);
+                reject(error);
+              } else {
+                resolve(result as CloudinaryUploadResult);
+              }
             }
-          }
+          );
+
+          uploadStream.end(buffer);
+        });
+
+        console.log('Cloudinary upload successful:', result);
+        return NextResponse.json({
+          url: result.secure_url,
+          public_id: result.public_id,
+          width: result.width,
+          height: result.height,
+        });
+      } catch (cloudinaryError) {
+        console.error('Cloudinary upload error:', cloudinaryError);
+        return NextResponse.json(
+          { error: 'Failed to upload to Cloudinary', details: cloudinaryError },
+          { status: 500 }
         );
-
-        uploadStream.end(buffer);
-      });
-
-      return NextResponse.json({
-        url: result.secure_url,
-        public_id: result.public_id,
-        width: result.width,
-        height: result.height,
-      });
+      }
     } else {
       // Handle image enhancement
       const { imageUrl, settings } = await request.json();
@@ -99,9 +124,9 @@ export async function POST(request: Request) {
       });
     }
   } catch (error) {
-    console.error('Error processing image:', error);
+    console.error('Error in enhance-image endpoint:', error);
     return NextResponse.json(
-      { error: 'Failed to process image' },
+      { error: 'Failed to process request', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

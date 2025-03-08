@@ -12,16 +12,18 @@ export const createServerClient = async () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           try {
-            // Use optional chaining and safe access
-            return cookieStore.get(name)?.value || undefined
+            // Use synchronous cookie access here
+            // Next.js warns about this but it's currently required for Supabase's cookie handling
+            const cookie = cookieStore.get(name)
+            return cookie?.value
           } catch (error) {
             console.error(`Error getting cookie ${name}:`, error)
             return undefined
           }
         },
-        set(name, value, options) {
+        set(name: string, value: string, options: any) {
           try {
             cookieStore.set({
               name,
@@ -32,7 +34,7 @@ export const createServerClient = async () => {
             console.error(`Error setting cookie ${name}:`, error)
           }
         },
-        remove(name, options) {
+        remove(name: string, options: any) {
           try {
             cookieStore.set({
               name,

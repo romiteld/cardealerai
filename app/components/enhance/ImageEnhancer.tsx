@@ -203,21 +203,33 @@ export default function ImageEnhancer({ image, onComplete, onClose }: ImageEnhan
   const handleAutoEnhance = async () => {
     try {
       setIsProcessing(true);
+      console.log('Auto enhancing image:', image.publicId);
+      
       const response = await fetch('/api/enhance-image/auto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publicId: image.publicId }),
       });
 
-      if (!response.ok) throw new Error('Failed to auto-enhance image');
+      if (!response.ok) {
+        console.error('Auto enhance request failed:', response.status, response.statusText);
+        throw new Error(`Failed to auto-enhance image: ${response.statusText}`);
+      }
 
       const data = await response.json();
+      console.log('Auto enhance response:', data);
+      
+      if (!data.url) {
+        console.error('No URL returned from auto-enhance:', data);
+        throw new Error('No enhanced image URL returned');
+      }
+      
       setPreviewUrl(data.url);
       setSettings({ preset: 'auto' });
       toast.success('Auto enhancement applied');
     } catch (error) {
       console.error('Error auto-enhancing:', error);
-      toast.error('Failed to auto-enhance image');
+      toast.error('Failed to auto-enhance image. Please try again.');
     } finally {
       setIsProcessing(false);
     }

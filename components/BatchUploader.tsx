@@ -19,7 +19,7 @@ export default function BatchUploader({
   initialImages = [],
   onUploadComplete,
   folder = 'car-images',
-  maxFiles = 10,
+  maxFiles = 20,
   maxSize = 10
 }: BatchUploaderProps) {
   const [files, setFiles] = useState<File[]>([]);
@@ -46,9 +46,15 @@ export default function BatchUploader({
       return true;
     });
     
+    // Check if adding these files would exceed the maxFiles limit
+    if (files.length + validFiles.length + existingImages.length > maxFiles) {
+      setError(`You can upload a maximum of ${maxFiles} images. You're attempting to add ${validFiles.length} more images to the existing ${files.length + existingImages.length}.`);
+      return;
+    }
+    
     setFiles(prev => [...prev, ...validFiles]);
     setError(null);
-  }, [maxSize]);
+  }, [files.length, existingImages.length, maxFiles, maxSize]);
   
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -72,30 +78,49 @@ export default function BatchUploader({
       const uploadPromises = files.map(async (file, index) => {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('folder', folder);
         
-        const response = await fetch('/api/enhance-image', {
-          method: 'POST',
-          body: formData
-        });
+        // Use our API endpoint for Cloudinary uploads
+        const uploadEndpoint = '/api/cloudinary/upload';
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to upload ${file.name}`);
+        // Add console logs for debugging
+        console.log(`Uploading file: ${file.name} to ${uploadEndpoint}`);
+        
+        try {
+          const response = await fetch(uploadEndpoint, {
+            method: 'POST',
+            body: formData
+          });
+          
+          // Check for non-JSON responses
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('Non-JSON response:', text);
+            throw new Error(`Server responded with non-JSON data. Status: ${response.status}`);
+          }
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to upload ${file.name}`);
+          }
+          
+          const data = await response.json();
+          console.log('Upload successful:', data);
+          
+          // Update progress
+          setProgress(Math.round(((index + 1) / files.length) * 100));
+          
+          return {
+            originalName: file.name,
+            url: data.secure_url || data.url,
+            publicId: data.public_id,
+            width: data.width,
+            height: data.height
+          };
+        } catch (uploadError) {
+          console.error(`Error uploading ${file.name}:`, uploadError);
+          throw uploadError;
         }
-        
-        const data = await response.json();
-        
-        // Update progress
-        setProgress(Math.round(((index + 1) / files.length) * 100));
-        
-        return {
-          originalName: file.name,
-          url: data.url,
-          publicId: data.public_id,
-          width: data.width,
-          height: data.height
-        };
       });
       
       const results = await Promise.all(uploadPromises);
@@ -107,6 +132,7 @@ export default function BatchUploader({
       setFiles([]);
       setExistingImages(allImages);
     } catch (err: any) {
+      console.error('Upload failed:', err);
       setError(err.message || 'Upload failed');
     } finally {
       setUploading(false);

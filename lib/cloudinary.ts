@@ -344,4 +344,101 @@ function getColorsFromPrompt(prompt: string): { primary: string; secondary: stri
   
   // Default elegant background
   return { primary: 'darkblue', secondary: 'black' };
+}
+
+/**
+ * Apply enhancement preset to an image
+ * @param publicId - The Cloudinary public ID of the image
+ * @param preset - The enhancement preset to apply
+ * @returns URL of the enhanced image
+ */
+export async function applyEnhancement(publicId: string, preset: string): Promise<string> {
+  console.log(`Applying preset ${preset} to image ${publicId}`);
+  
+  // If Cloudinary is not configured, return a mock URL
+  if (!process.env.CLOUDINARY_API_KEY || !process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) {
+    console.warn("Cloudinary credentials not set, using mock URL");
+    return `https://example.com/mock-enhance/${publicId}/${preset}`;
+  }
+  
+  try {
+    // Define preset transformations
+    const transformations = getPresetTransformations(preset);
+    
+    // Generate the Cloudinary URL with transformations
+    const url = cloudinary.url(publicId, {
+      transformation: transformations,
+      secure: true,
+      version: Date.now() // Cache busting
+    });
+    
+    console.log(`Enhanced image URL: ${url}`);
+    return url;
+  } catch (error) {
+    console.error(`Error applying enhancement ${preset} to ${publicId}:`, error);
+    // Return original image URL on error
+    return cloudinary.url(publicId, { secure: true });
+  }
+}
+
+/**
+ * Get the transformations for a preset
+ * @param preset - The preset name
+ * @returns Array of Cloudinary transformation objects
+ */
+function getPresetTransformations(preset: string): any[] {
+  const presetMap: Record<string, any[]> = {
+    'auto': [
+      { quality: 'auto:best' },
+      { effect: 'improve' }
+    ],
+    'professional': [
+      { quality: 'auto:best' },
+      { effect: 'enhance:50' },
+      { effect: 'saturation:20' },
+      { effect: 'contrast:10' }
+    ],
+    'hdr': [
+      { effect: 'improve' },
+      { effect: 'contrast:30' },
+      { effect: 'vibrance:30' }
+    ],
+    'dramatic': [
+      { effect: 'art:athena' },
+      { effect: 'contrast:40' }
+    ],
+    'artistic': [
+      { effect: 'art:zorro' }
+    ],
+    'portrait': [
+      { effect: 'improve' },
+      { effect: 'redeye' },
+      { effect: 'skin_tone' }
+    ],
+    'product': [
+      { effect: 'gen_restore' },
+      { effect: 'enhance' },
+      { effect: 'improve' }
+    ],
+    'landscape': [
+      { effect: 'improve' },
+      { effect: 'vibrance:30' },
+      { effect: 'saturation:20' }
+    ],
+    'blackAndWhite': [
+      { effect: 'grayscale' },
+      { effect: 'contrast:30' }
+    ],
+    'vintage': [
+      { effect: 'sepia:50' },
+      { effect: 'vignette' }
+    ],
+    // Default to auto enhance if preset not found
+    'default': [
+      { quality: 'auto:best' },
+      { effect: 'improve' }
+    ]
+  };
+  
+  return presetMap[preset] || presetMap['default'];
 } 
