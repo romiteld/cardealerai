@@ -27,6 +27,21 @@ const nextConfig = {
     optimizeCss: true,
     scrollRestoration: true,
   },
+  webpack: (config, { isServer }) => {
+    // Fix for Cloudinary and other Node.js modules
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        stream: false,
+        util: false,
+        crypto: false,
+      };
+    }
+    return config;
+  },
   async headers() {
     return [
       {

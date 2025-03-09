@@ -29,6 +29,7 @@ CarDealerAI is a comprehensive web application designed for automotive dealershi
 ### 1.3 Subscription Tiers
 
 #### Pro (Single Dealership)
+
 - Up to 100 vehicle listings
 - Basic AI image enhancement
 - Single social media platform
@@ -36,6 +37,7 @@ CarDealerAI is a comprehensive web application designed for automotive dealershi
 - Email support
 
 #### Growth (Single Dealership)
+
 - Up to 500 vehicle listings
 - Advanced AI image enhancements
 - All social media platforms
@@ -44,6 +46,7 @@ CarDealerAI is a comprehensive web application designed for automotive dealershi
 - Analytics dashboard
 
 #### Enterprise (Multiple Dealerships)
+
 - Unlimited vehicle listings
 - All AI features
 - All social media platforms
@@ -55,7 +58,6 @@ CarDealerAI is a comprehensive web application designed for automotive dealershi
 
 ## 2. Complete Project Structure
 
-```
 CarDealerAI/
 ├── app/                      # Next.js app directory for routes
 │   ├── (auth)/               # Authentication routes (grouped)
@@ -278,7 +280,6 @@ CarDealerAI/
 ├── tailwind.config.js        # Tailwind CSS configuration
 ├── tsconfig.json             # TypeScript configuration
 └── package.json              # Dependencies and scripts
-```
 
 ## 3. Detailed Component Specifications
 

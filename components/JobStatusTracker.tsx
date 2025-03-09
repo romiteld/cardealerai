@@ -172,7 +172,7 @@ export default function JobStatusTracker({
   onJobComplete,
   onJobFailed,
   pollingInterval = 5000,
-  maxPolls = 12
+  maxPolls = 24
 }: JobStatusTrackerProps) {
   // Count jobs by status
   const completedCount = jobs.filter(job => job.status === 'completed').length;

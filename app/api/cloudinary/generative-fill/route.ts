@@ -1,5 +1,3 @@
-'use client';
-
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import { Cloudinary } from '@cloudinary/url-gen';
@@ -109,15 +107,18 @@ export async function POST(request: Request) {
         
         console.log('Generated URL for generative background replacement:', generatedUrl);
         
-        // Use the Admin API to persist this transformation
+        // Use the Admin API to persist this transformation with optimized settings for background replacement
         const result = await cloudinary.uploader.explicit(publicId, {
           type: 'upload',
           eager: [{ 
             transformation: [
-              { effect: transformationStr.replace('e_', '') }
+              { effect: transformationStr.replace('e_', '') },
+              { flags: 'preserve_transparency' },
+              { crop: 'scale', width: 1200 }  // Scale to larger size for better quality
             ],
-            format: 'jpg',
-            quality: 80
+            format: 'auto',
+            quality: 'auto:best',
+            dpr: '2.0'
           }],
           eager_async: true,
           tags: [jobId, 'generative-bg-replace', 'car-dealer-ai']
@@ -168,8 +169,9 @@ export async function POST(request: Request) {
           type: 'upload',
           eager: [{ 
             transformation: [{ effect: transformationStr.replace('e_', '') }],
-            format: 'jpg',
-            quality: 80
+            format: 'auto',
+            quality: 'auto:best',
+            dpr: '2.0'
           }],
           eager_async: true,
           tags: [jobId, 'auto-bg-replace', 'car-dealer-ai']
@@ -249,15 +251,81 @@ export async function GET(request: Request) {
       );
     }
     
-    // In a real implementation, you would check your database for the status of this job
-    // For now, we'll return a mock "still processing" response
+    console.log(`Checking status for job ID: ${jobId}`);
     
-    return NextResponse.json({
-      jobId,
-      status: 'processing',
-      message: 'Job is still being processed. Check back later or wait for webhook notification.'
-    });
-    
+    // Extract the tag we created when submitting the job
+    // The jobId should match the tag we used when creating the transformation
+    try {
+      // Search for resources with the specific job tag
+      const result = await cloudinary.api.resources_by_tag(jobId, {
+        resource_type: 'image',
+        max_results: 10
+      });
+      
+      console.log(`Found ${result.resources.length} resources with tag ${jobId}`);
+      
+      if (!result.resources.length) {
+        // No resources found with this tag yet, job may still be processing
+        return NextResponse.json({
+          status: 'processing',
+          jobId,
+          message: 'Job is still processing. No resources found yet.'
+        });
+      }
+      
+      // Check the eager status of the resources
+      const resources = result.resources;
+      
+      // Get the first resource details
+      const resource = resources[0];
+      const resourceDetails = await cloudinary.api.resource(resource.public_id, {
+        resource_type: 'image',
+        eager: true
+      });
+      
+      // Check if eager transformations are completed
+      if (resourceDetails.eager && resourceDetails.eager.length > 0) {
+        const urls = resourceDetails.eager.map((img: { secure_url: string }) => img.secure_url);
+        
+        console.log(`Job ${jobId} is complete. Found ${urls.length} result URLs.`);
+        
+        return NextResponse.json({
+          status: 'completed',
+          jobId,
+          urls,
+          publicId: resource.public_id,
+          message: 'Job completed successfully'
+        });
+      } else {
+        // Resources found but eager transformations still processing
+        return NextResponse.json({
+          status: 'processing',
+          jobId,
+          message: 'Resources found but eager transformations still processing'
+        });
+      }
+    } catch (error: any) {
+      console.error(`Error checking job status for ${jobId}:`, error);
+      
+      // Don't fail immediately, the job might still be in progress
+      if (error.http_code === 404) {
+        return NextResponse.json({
+          status: 'processing',
+          jobId,
+          message: 'Job is being processed. No resources found yet.'
+        });
+      }
+      
+      // For other errors, return an error response
+      return NextResponse.json(
+        { 
+          error: 'Failed to check job status',
+          message: error.message || 'Unknown error',
+          jobId
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error checking job status:', error);
     return NextResponse.json(

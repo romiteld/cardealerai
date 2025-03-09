@@ -72,6 +72,20 @@ function useBackgroundPreview(publicId: string, prompt: string | null) {
   return previewUrl;
 }
 
+// Processing indicator component
+function ProcessingIndicator({ publicId, prompt }: { publicId: string, prompt: string }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 text-white p-4 z-10">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
+      <div className="text-center">
+        <p className="font-medium">Replacing Background</p>
+        <p className="text-sm opacity-80 mt-1">Using AI to add "{prompt}" background</p>
+        <p className="text-xs mt-3 opacity-60">This may take 15-30 seconds</p>
+      </div>
+    </div>
+  );
+}
+
 export default function BackgroundProcessor({ listingId, imageData, onImageDataChange }: BackgroundProcessorProps) {
   const [batchPreviews, setBatchPreviews] = useState<{ [key: string]: string[] }>({});
   const [selectedPreviews, setSelectedPreviews] = useState<{ [key: string]: string }>({});
@@ -82,6 +96,16 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
   const [success, setSuccess] = useState<string | null>(null);
   const [backgroundPrompt, setBackgroundPrompt] = useState<string>('luxury car showroom');
   const [processingJobs, setProcessingJobs] = useState<ProcessingJob[]>([]);
+  const [processingResults, setProcessingResults] = useState<Record<string, ProcessingResult>>({});
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
+  const [isPending, setIsPending] = useState(false);
+  const [isShowing, setIsShowing] = useState(true);
+  
+  // Add state for processing status
+  const [processingStatus, setProcessingStatus] = useState<string>('');
+  
+  // Add a new state for tracking active background operations
+  const [activeOperations, setActiveOperations] = useState<Record<string, boolean>>({});
   
   // Background options for the dropdown - curated for best results
   const backgroundOptions = [
@@ -177,130 +201,139 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
   
   const processBatchBackground = async () => {
     if (imageData.length === 0) {
-      setError('No images to process');
       toast.error('No images to process');
       return;
     }
     
     setProcessing(true);
-    setProcessingProgress(0);
-    setError(null);
-    setSuccess(null);
     setProcessingJobs([]);
     
     try {
-      // Process each image one by one to show progress
-      const results: ProcessingResult[] = [];
+      // Process each image
       for (let i = 0; i < imageData.length; i++) {
         const { publicId } = imageData[i];
         
-        // Generate optimized seed automatically for this image
-        const optimizedSeed = getOptimizedSeed(publicId, backgroundPrompt);
+        // Set this image as being actively processed
+        setActiveOperations(prev => ({
+          ...prev,
+          [publicId]: true
+        }));
         
         console.log(`Processing image ${i+1}/${imageData.length}: ${publicId}`);
-        toast.loading(`Processing image ${i+1}/${imageData.length}`);
+        toast.loading(`Processing image ${i+1}/${imageData.length}`, {
+          id: `processing-${publicId}`
+        });
         
         try {
-          // Use our generative background replacement API endpoint
-          console.log(`Sending request for image ${publicId} with prompt: ${backgroundPrompt || 'none'}`);
+          // Generate optimized seed automatically for this image
+          const optimizedSeed = getOptimizedSeed(publicId, backgroundPrompt);
           
           // Add timeout and better error handling for fetch
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
           
-          let data;
+          let data: any; // Properly type the data variable
           let usedMockApi = false;
+          let retryCount = 0;
+          const maxRetries = 3;
           
-          try {
-            // Call the API with the correct parameters for Generative Background Replacement
-            // Use the automatically generated optimized seed
-            const response = await fetch('/api/cloudinary/generative-fill', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                publicId,
-                prompt: backgroundPrompt,
-                seed: optimizedSeed // Use the optimized seed
-              }),
-              signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            // Check if response exists and is valid
-            if (!response) {
-              throw new Error('No response received from server');
-            }
-            
-            // Parse the response JSON only once and store it
-            data = await response.json();
-            console.log('Generative background replacement API response received:', data);
-            
-            if (!response.ok) {
-              console.error('API error:', data);
-              
-              // Provide more details about the error
-              const errorMsg = data.error || data.message || data.details?.message || `Failed to process image ${i + 1}`;
-              console.error('Error details:', JSON.stringify(data, null, 2));
-              
-              // Check if this is a Cloudinary configuration issue
-              if (data.details?.cloudinary_config) {
-                const config = data.details.cloudinary_config;
-                console.error('Cloudinary configuration status:', config);
-                
-                if (!config.cloud_name_set || !config.api_key_set || !config.api_secret_set) {
-                  console.error('Missing Cloudinary configuration. Please check your environment variables.');
-                }
-              }
-              
-              // If the real API failed, try the mock API as fallback
-              throw new Error(errorMsg);
-            }
-          } catch (cloudinaryError) {
-            console.log("Real Cloudinary API failed, trying mock API as fallback...", cloudinaryError);
-            clearTimeout(timeoutId);
-            
+          // Using a retry loop for better resilience
+          while (retryCount <= maxRetries) {
             try {
-              // Attempt to use the mock API instead
-              const mockResponse = await fetch('/api/cloudinary/mock-fill', {
+              setProcessingStatus(`Processing image ${i+1}/${imageData.length}${retryCount > 0 ? ` (Retry ${retryCount}/${maxRetries})` : ''}`);
+              
+              // Update toast notification with processing status
+              toast.loading(`Processing image ${i+1}/${imageData.length}${retryCount > 0 ? ` (Retry ${retryCount}/${maxRetries})` : ''}`, {
+                id: `processing-${publicId}`
+              });
+              
+              // Call the API with the correct parameters for Generative Background Replacement
+              // Use the automatically generated optimized seed
+              const response = await fetch('/api/cloudinary/generative-fill', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                   publicId,
                   prompt: backgroundPrompt,
-                  seed: optimizedSeed
-                })
+                  seed: optimizedSeed // Use the optimized seed
+                }),
+                signal: controller.signal
               });
               
-              if (!mockResponse.ok) {
-                throw new Error('Mock API also failed');
+              // Success! Break out of retry loop
+              clearTimeout(timeoutId);
+              
+              // Check if response exists and is valid
+              if (!response) {
+                throw new Error('No response received from server');
               }
               
-              data = await mockResponse.json();
-              usedMockApi = true;
-              console.log('Mock API response received:', data);
+              // Parse the response JSON
+              data = await response.json();
+              console.log('Generative background replacement API response received:', data);
               
-              // Show toast indicating we're using mock data
-              toast.success(`Using simulated images for image ${i+1}`);
-            } catch (mockError: any) {
-              // Both APIs failed, re-throw the original error
-              console.error('Both real and mock APIs failed:', mockError);
-              throw cloudinaryError;
+              if (!response.ok) {
+                throw new Error(`API error: ${data.error || 'Unknown error'}`);
+              }
+              
+              // Successfully got response, break retry loop
+              break;
+            } catch (error) {
+              // Only retry on network errors or timeouts, not on API errors
+              const isNetworkError = error instanceof Error && 
+                (error.name === 'AbortError' || error.message.includes('network') || error.message.includes('fetch'));
+              
+              retryCount++;
+              
+              if (retryCount > maxRetries || !isNetworkError) {
+                // We've exhausted all retries, inform the user and fail gracefully
+                console.error("Cloudinary generative background replace failed after multiple attempts");
+                toast.error(`Failed to process image ${i+1} after multiple attempts. Please try again later.`, {
+                  id: `processing-${publicId}`,
+                  duration: 5000
+                });
+                
+                // Not a network error or we've exhausted retries
+                throw error;
+              }
+              
+              // Wait before retrying (with exponential backoff)
+              const backoffTime = 2000 * Math.pow(2, retryCount - 1);
+              console.log(`Retrying in ${backoffTime}ms... (${retryCount}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
             }
           }
           
           // Handle completed or processing status
           if (data.status === 'completed' && data.urls && data.urls.length > 0) {
             // Results available immediately
-            results.push({ 
+            const result: ProcessingResult = { 
               original: publicId, 
               previews: data.urls,
               transformation: data.transformation
-            });
+            };
             
             if (usedMockApi) {
               console.log(`Using mock images for ${publicId}`);
             }
+            
+            // Update the processing results
+            setProcessingResults(prev => ({
+              ...prev,
+              [publicId]: result
+            }));
+            
+            // Update the previews
+            setBatchPreviews(prev => ({
+              ...prev,
+              [publicId]: data.urls
+            }));
+            
+            // Auto-select first preview
+            setSelectedPreviews(prev => ({
+              ...prev,
+              [publicId]: data.urls[0]
+            }));
           } else if (data.status === 'processing') {
             // For async processing, we need to poll or wait for webhook
             console.log(`Job ${data.jobId} is being processed asynchronously`);
@@ -313,13 +346,25 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
             ]);
             
             // Add a placeholder result with async flag
-            results.push({ 
+            const asyncResult: ProcessingResult = { 
               original: publicId, 
               previews: [],
               jobId: data.jobId,
               isAsync: true,
               transformation: data.transformation
-            });
+            };
+            
+            // Update the processing results
+            setProcessingResults(prev => ({
+              ...prev,
+              [publicId]: asyncResult
+            }));
+            
+            // Auto-select first preview
+            setSelectedPreviews(prev => ({
+              ...prev,
+              [publicId]: asyncResult.previews[0]
+            }));
           } else {
             throw new Error('No preview images were generated or job status not recognized');
           }
@@ -328,14 +373,29 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
           toast.error(`Failed to process image ${i+1}: ${processingError.message}`);
           
           // Add placeholder for failed image
-          results.push({ 
+          const failedResult: ProcessingResult = { 
             original: publicId, 
             error: processingError.message,
             previews: [] // Empty previews for failed image
-          });
+          };
           
-          // Continue with next image
-          continue;
+          // Update the processing results
+          setProcessingResults(prev => ({
+            ...prev,
+            [publicId]: failedResult
+          }));
+          
+          // Auto-select first preview
+          setSelectedPreviews(prev => ({
+            ...prev,
+            [publicId]: failedResult.previews[0]
+          }));
+        } finally {
+          // After each image is done processing, mark it as no longer active
+          setActiveOperations(prev => ({
+            ...prev,
+            [publicId]: false
+          }));
         }
         
         // Update progress
@@ -344,7 +404,7 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
       }
       
       // Check if we have any successful results
-      const successfulResults = results.filter(result => 
+      const successfulResults = Object.values(processingResults).filter(result => 
         (!result.error && result.previews.length > 0) || result.isAsync
       );
       
@@ -356,7 +416,7 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
       }
       
       // Organize results by original image ID for immediate results
-      const newPreviews = results.reduce((acc, curr) => {
+      const newPreviews = successfulResults.reduce((acc, curr) => {
         // Only include successful results with previews in batchPreviews
         if (curr.previews && curr.previews.length > 0 && !curr.isAsync) {
           acc[curr.original] = curr.previews;
@@ -377,7 +437,7 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
       }));
       
       // Check if all results are immediate or some are async
-      const hasAsyncResults = results.some(result => result.isAsync);
+      const hasAsyncResults = Object.values(processingResults).some(result => result.isAsync);
       
       if (!hasAsyncResults) {
         setProcessing(false);
@@ -494,6 +554,7 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
           onClick={processBatchBackground}
           disabled={processing || imageData.length === 0}
           className="bg-blue-600 hover:bg-blue-700"
+          title="Process All Images"
         >
           {processing ? 'Processing...' : 'Process All Images'}
         </Button>
@@ -502,6 +563,7 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
           onClick={saveBatchSelection}
           disabled={saving || Object.keys(selectedPreviews).length === 0}
           className="bg-green-600 hover:bg-green-700"
+          title="Save Selected Versions"
         >
           {saving ? 'Saving...' : 'Save Selected Versions'}
         </Button>
@@ -546,74 +608,77 @@ export default function BackgroundProcessor({ listingId, imageData, onImageDataC
           {imageData.map((img, index) => {
             const publicId = img.publicId;
             const previews = batchPreviews[publicId] || [];
+            const result = processingResults[publicId];
+            const isProcessing = activeOperations[publicId];
             
             if (previews.length === 0) return null;
             
             return (
-              <Card key={publicId} className="p-4">
-                <h4 className="font-medium mb-2">Image {index + 1}</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="mb-1 text-sm font-medium">Original</p>
-                    <div className="relative h-64 w-full bg-gray-100 rounded-md overflow-hidden">
-                      <Image
-                        src={img.url}
-                        alt={`Original image ${index + 1}`}
-                        fill
-                        style={{ objectFit: 'contain' }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p className="mb-1 text-sm font-medium">
-                      Professional Background
-                      {selectedPreviews[publicId] && (
-                        <span className="text-green-600 ml-2">✓ Selected</span>
-                      )}
-                    </p>
-                    <div className="relative h-64 w-full bg-gray-100 rounded-md overflow-hidden">
-                      {previews.length > 0 ? (
+              <div className="relative" key={publicId}>
+                {isProcessing && <ProcessingIndicator publicId={publicId} prompt={backgroundPrompt} />}
+                <Card className="p-4">
+                  <h4 className="font-medium mb-2">Image {index + 1}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="mb-1 text-sm font-medium">Original</p>
+                      <div className="relative h-64 w-full bg-gray-100 rounded-md overflow-hidden">
                         <Image
-                          src={selectedPreviews[publicId] || previews[0]}
-                          alt={`New background image ${index + 1}`}
-                          fill
-                          style={{ objectFit: 'contain' }}
+                          src={img.url}
+                          alt={`Original car image ${index + 1}`}
+                          className="rounded-md w-full h-auto max-h-[200px] object-contain"
                         />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-gray-500">
-                          Processing...
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="mb-1 text-sm font-medium">
+                        Professional Background
+                        {selectedPreviews[publicId] && (
+                          <span className="text-green-600 ml-2">✓ Selected</span>
+                        )}
+                      </p>
+                      <div className="relative h-64 w-full bg-gray-100 rounded-md overflow-hidden">
+                        {previews.length > 0 ? (
+                          <Image
+                            src={selectedPreviews[publicId] || previews[0]}
+                            alt={`Generated preview ${previews.length > 0 ? previews[0] : ''} for image ${index + 1}`}
+                            className="rounded-md w-full h-auto max-h-[200px] object-contain"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-gray-500">
+                            Processing...
+                          </div>
+                        )}
+                      </div>
+                      {previews.length > 1 && (
+                        <div className="flex mt-2 space-x-2 overflow-x-auto p-1">
+                          {previews.map((preview, previewIndex) => (
+                            <button
+                              key={previewIndex}
+                              onClick={() => setSelectedPreviews(prev => ({
+                                ...prev,
+                                [publicId]: preview
+                              }))}
+                              className={`relative h-16 w-16 rounded overflow-hidden border-2 ${
+                                selectedPreviews[publicId] === preview 
+                                  ? 'border-blue-500' 
+                                  : 'border-transparent'
+                              }`}
+                              title={`Select preview ${previewIndex + 1}`}
+                            >
+                              <Image
+                                src={preview}
+                                alt={`Thumbnail preview ${index + 1}`}
+                                className="w-full h-auto object-contain"
+                              />
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
-                    {previews.length > 1 && (
-                      <div className="flex mt-2 space-x-2 overflow-x-auto p-1">
-                        {previews.map((previewUrl, previewIndex) => (
-                          <button
-                            key={previewIndex}
-                            onClick={() => setSelectedPreviews(prev => ({
-                              ...prev,
-                              [publicId]: previewUrl
-                            }))}
-                            className={`relative h-16 w-16 rounded overflow-hidden border-2 ${
-                              selectedPreviews[publicId] === previewUrl 
-                                ? 'border-blue-500' 
-                                : 'border-transparent'
-                            }`}
-                          >
-                            <Image
-                              src={previewUrl}
-                              alt={`Preview option ${previewIndex + 1}`}
-                              fill
-                              style={{ objectFit: 'cover' }}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </div>
             );
           })}
         </div>
